@@ -1,5 +1,9 @@
 # dsh-context-guard
 
+[中文介绍、安装教程与使用说明](README.zh-CN.md) · [开源声明草案](docs/OPEN_SOURCE_STATEMENT.zh-CN.md)
+
+Framework designed by the author **netsadly**; implementation code written by **GPT Astra**. This is an independent community project, not an official DeepSeek, LM Studio or OpenAI product. Only this plugin's source, documentation and synthetic tests are in scope for a future public release; the author's other projects and private data are excluded. The repository remains private, and a formal license has not yet been selected.
+
 Private experimental context guard for **DeepSeek Harness 0.2.1-rc.5 + LM Studio**. Not a public release. This replaces the native `compaction-basic` service while retaining its transactional session replacement machinery.
 
 ## What it does
@@ -56,6 +60,8 @@ Default tests require no model or downloaded dependencies. Native tests require 
 Native tests exercise the real Session and BasicCompactionEngine transaction code with fake LLM, maintenance admission and flush. They verify event retention and terminal marker closure, **not** actual Agent scheduling or disk persistence. Live tests verify tokenizer access and complete model-generated checkpoints. Desktop installation and recovery are separate acceptance steps.
 
 ## Limitations
+
+Manual `recover` now saves validated intermediate summaries under `~/.dsh/context-guard-checkpoints`. Each invocation starts at most two new model calls, with a 210-second summary deadline, then reports **Recovery paused**. Run the same command again until it reports **Recovered**; an application restart does not discard completed checkpoints. Only the final native transaction replaces context. This does not resume the historical task. Exact input/session/model/configuration/prompt changes isolate cached work. Corrupt checkpoints fail closed. These files contain private summaries, are retained locally, and are not uploaded; deleting them while Harness is idle only discards recovery progress. Automatic proactive compaction retains its existing behavior and does not use this manual checkpoint store.
 
 - Text-only local provider; unsupported image/audio/file blocks fail closed. Other providers do not get this plugin's compaction behavior while it replaces the global service.
 - SDK 1.5.0 cannot cancel `countTokens` RPCs. Caller cancellation/timeouts stop waiting; one outstanding RPC is retained until it settles, and further tokenization is rejected rather than accumulated. Restart the plugin if the SDK connection never settles.

@@ -13,3 +13,7 @@ Requirements:
 8. Publish only source, documentation and synthetic tests to a PRIVATE GitHub repository. Never upload session data, logs, credentials, generated local paths or recovery summaries. Public release is deferred.
 
 Initial implementation may support text-only LM Studio routes. Explicitly document limits and unverified integration behavior.
+
+## Resumable manual recovery
+
+Persist each validated summary locally and reuse it across manual recovery commands and application restarts. Bind checkpoints to the exact input, session, model, capacity, configuration and prompt version; changed inputs must not reuse stale work. Each invocation admits at most two new model calls and pauses without replacing history. Cached calls still count against the logical tree limit. Incomplete, canceled or corrupt results must not be accepted. Only the native transaction may commit the complete final summary. Report partial progress distinctly from recovered history. Checkpoints contain private content and must never enter source control or uploads.

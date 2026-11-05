@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { createGuardPlugin } from '../lib/plugin.mjs';
 import { estimate } from '../lib/core.mjs';
 
@@ -25,7 +26,7 @@ test('native Harness compaction preserves events, persists, and rolls back malfo
   const oldFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ data: [{ id: 'test', type: 'llm', state: 'loaded', loaded_context_length: 30208 }] }) });
   try {
-    for (const mode of ['complete', 'eof', 'cancel', 'malformed']) await t.test(mode, async () => {
+    for (const mode of ['complete', 'eof', 'cancel', 'malformed', 'resume']) await t.test(mode, async () => {
       const ctx = new Context();
       const store = new SessionStore(ctx);
       const session = store.prepare('synthetic', { meta: { cwd: process.cwd() } });
@@ -41,17 +42,29 @@ test('native Harness compaction preserves events, persists, and rolls back malfo
           return { nodes, totalTokens: nodes.reduce((n, x) => n + x.tokens, 0) };
         }
       });
-      ctx.provide('commands', { register() {} });
+      let command;
+      ctx.provide('commands', { register(value) { command = value; } });
       const controller = new AbortController();
       ctx.provide('llm', { async *stream() {
         yield { type: 'text-delta', index: 0, text: mode === 'malformed' ? 'not a checkpoint' : summary };
         if (mode === 'cancel') controller.abort(new Error('cancelled'));
         if (mode !== 'eof') yield { type: 'finish', reason: { kind: 'stop' } };
       } });
-      const Plugin = createGuardPlugin({ BasicCompactionEngine, toolPairingBalancedBefore, BlockAssembler, overflowCode: CONTEXT_WINDOW_EXCEEDED_CODE, makeCounter: () => async (_, messages) => estimate(messages) });
+      const Plugin = createGuardPlugin({ BasicCompactionEngine, toolPairingBalancedBefore, BlockAssembler, overflowCode: CONTEXT_WINDOW_EXCEEDED_CODE, makeCounter: () => async (_, messages) => estimate(messages), checkpointRoot: await mkdtemp(join(tmpdir(), 'dsh-native-checkpoints-')) });
       const plugin = new Plugin(ctx);
       const agent = { session, options: { provider: 'lmstudio', model: 'test' }, runMaintenance: fn => fn(controller.signal) };
-      if (mode === 'complete') {
+      let attempts = 1;
+      if (mode === 'resume') {
+        const invocation = { agent, signal: controller.signal, commandId: 'synthetic-command', rawInput: 'recover' };
+        const first = await command.handler(invocation);
+        assert.match(first.text, /Recovery paused/);
+        assert.equal(session.surface.replaceGeneration, 0);
+        assert.deepEqual(session.surface.nodes, surface);
+        let next;
+        do { next = await command.handler(invocation); attempts++; } while (/Recovery paused/.test(next.text) && attempts < 10);
+        assert.match(next.text, /^Recovered/);
+        assert.equal(session.surface.replaceGeneration, 1);
+      } else if (mode === 'complete') {
         const result = await plugin.compactNow(agent, controller.signal);
         assert.ok(result.shadowedSeqs.length > 0);
         assert.equal(session.surface.replaceGeneration, 1);
@@ -62,9 +75,9 @@ test('native Harness compaction preserves events, persists, and rolls back malfo
         assert.equal(session.surface.replaceGeneration, 0);
       }
       assert.deepEqual(session.snapshotEvents().slice(0, original.length), original);
-      assert.equal(session.snapshotEvents().filter(x => x.type === 'compaction/start').length, 1);
-      assert.equal(session.snapshotEvents().filter(x => x.type === 'compaction/end').length, 1);
-      assert.equal(flushes, 1);
+      assert.equal(session.snapshotEvents().filter(x => x.type === 'compaction/start').length, attempts);
+      assert.equal(session.snapshotEvents().filter(x => x.type === 'compaction/end').length, attempts);
+      assert.equal(flushes, attempts);
     });
   } finally { globalThis.fetch = oldFetch; }
 });
