@@ -61,6 +61,7 @@ Native tests exercise the real Session and BasicCompactionEngine transaction cod
 - SDK 1.5.0 cannot cancel `countTokens` RPCs. Caller cancellation/timeouts stop waiting; one outstanding RPC is retained until it settles, and further tokenization is rejected rather than accumulated. Restart the plugin if the SDK connection never settles.
 - Concurrent local requests may receive `TOKENIZER_BUSY`. The installed bundle allows **600 seconds** total for a summary tree, with at most 32 calls; the core fallback is 180 seconds when no timeout is supplied. Large records require several sequential model calls, so this timeout is independent of the per-request 5-second capacity/tokenizer check.
 - Summaries are lossy and can contain model mistakes. Heading validation checks structure, not factual completeness. The original record is the recovery authority.
+- Desktop manual commands were observed to abort after about five minutes, even with the plugin's 600-second limit. The shorter summary prompt reduces work, but cannot override the host deadline; slow models or very large records can still fail safely without committing a replacement.
 - Internal Harness APIs are version-pinned; revalidate on every Harness update.
 
 ## Review policy
