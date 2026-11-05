@@ -14,7 +14,7 @@ class Base {
 function fixture() {
   const hooks = new Map(); const commands = [];
   const ctx = { on: (name, fn) => hooks.set(name, fn), commands: { register: command => commands.push(command) }, tokenMeter: { measure: () => ({ totalTokens: 0 }) } };
-  const Plugin = createGuardPlugin({ BasicCompactionEngine: Base, toolPairingBalancedBefore: () => true, BlockAssembler: class {}, overflowCode: 'CONTEXT_WINDOW_EXCEEDED', makeCounter: () => async (model, messages, tools) => estimate({ messages, tools }) });
+  const Plugin = createGuardPlugin({ BasicCompactionEngine: Base, toolPairingBalancedBefore: () => true, toolPairingBalancedAfter: () => true, BlockAssembler: class {}, overflowCode: 'CONTEXT_WINDOW_EXCEEDED', makeCounter: () => async (model, messages, tools) => estimate({ messages, tools }) });
   const plugin = new Plugin(ctx);
   const session = { messages: [], surface: { nodes: [0, 1, 2, 3], replaceGeneration: 0 }, requestHeader: () => ({ config: { provider: 'lmstudio', model: 'test', maxTokens: 8192 }, tools: [] }), deriveMessages() { return this.messages; }, eventAt: seq => ({ type: seq === 0 ? 'system/message' : 'user/message', seq }), deriveEventMessage: () => ({ role: 'user', content: 'recent'.repeat(1000) }) };
   const agent = { options: { provider: 'lmstudio', model: 'test' }, session };
@@ -78,4 +78,27 @@ test('admitted inputs are not counted again on request or overflow recovery', as
   plugin.pending.set(agent, [{ content: 'pending' }]);
   await hooks.get('agent/request-error')({ agent, failure: { code: 'OTHER' }, signal: new AbortController().signal }, () => ({ kind: 'fail' }));
   assert.equal(plugin.pending.has(agent), false);
+});
+
+test('hard pressure includes complete tool tail rather than checkpoint only', () => withCapacity(async () => {
+  const {plugin,agent}=fixture();
+  agent.session.surface.nodes=[0,1,2,3];
+  agent.session.eventAt=seq=>({type:seq===0?'system/message':seq===1?'user/message':seq===2?'assistant/message':'tool/result',data:{source:{kind:'compact-checkpoint'}}});
+  assert.deepEqual(plugin.selectRange(agent.session,true),{start:1,end:3});
+  let selected; plugin.compactRegion=async(start,end)=>{selected={start,end};agent.session.messages=[{content:'small checkpoint'}];return {shadowedSeqs:[1,2,3]};};
+  agent.session.messages=[{content:'large result '.repeat(10000)}];
+  await plugin.compactIfNeeded(agent,'pressure',new AbortController().signal);
+  assert.deepEqual(selected,{start:1,end:3});
+}));
+test('soft pressure with no useful prefix admits request but hard pressure fails closed',()=>withCapacity(async()=>{
+  const {plugin,agent}=fixture();plugin.selectRange=()=>null;
+  plugin.measureGuard=async()=>({count:17000,budget:{trigger:16000,available:19968}});
+  assert.equal(await plugin.compactIfNeeded(agent,'pressure'),null);
+  plugin.measureGuard=async()=>({count:21000,budget:{trigger:16000,available:19968}});
+  await assert.rejects(plugin.compactIfNeeded(agent,'pressure'),/safe budget/);
+}));
+test('aggressive range preserves newest human instruction',()=>{
+ const {plugin,agent}=fixture();
+ agent.session.eventAt=seq=>({type:seq===0?'system/message':'user/message',data:{source:{kind:'human'}}});
+ assert.deepEqual(plugin.selectRange(agent.session,true),{start:1,end:2});
 });

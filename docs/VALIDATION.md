@@ -59,3 +59,23 @@ Environment: DeepSeek Harness 0.2.1-rc.5, LM Studio SDK 1.5.0, local text model 
 Standards and Spec were reviewed separately. Blocking findings were fixed with regression coverage for terminal stream detection, cancellation, pending-message accounting, import generation, tokenizer single-flight behavior and native bundle patching.
 
 Text-only and local-provider scope remains intentional. Token counts include conservative padding but are not exact provider chat-template accounting. Summaries are lossy; structure validation cannot prove factual completeness. Original session events and an independent local backup remain the authority. Private logs, backups and generated installation files are excluded from this repository.
+
+## 2026-11-06: missing-section repair
+
+Added one bounded regeneration for missing mandatory sections. Tests cover preservation of original source during repair, valid-only caching, repeated malformed output, both call limits, cancellation and truncated repair. Native Harness transaction tests include successful repair before commit. Offline/native run: 35 passed, 1 live test skipped; the live LM Studio synthetic checkpoint test was run separately and passed. Standards and Spec reviews found no blocking issues; the wording-dependent error classification noted by Standards was replaced with a dedicated code.
+
+The local bundle was rebuilt. The currently running desktop process has not been restarted, and continuation of the user's historical task has not been tested by this patch validation.
+
+
+## 2026-11-06: distinct corrective prompt
+The previous retry used identical source and system instructions at temperature zero. Local logs showed identical incomplete responses on both attempts despite stop finish reasons. Repair now uses a distinct seven-line template, retaining source data; chunk sizing reserves the larger prompt and checkpoint identity binds both prompts. All 35 offline/native tests passed. A separate live synthetic test injected a missing-section first response, then called the actual local model for repair: all seven sections and both supplied failures were preserved. This does not certify continuation of the original task. Independent Standards and Spec reviews found no blockers.
+
+Live desktop follow-up: rebuilt local bundle, exited and relaunched Harness, backed up the current session with matching SHA-256, then ran the manual recovery command. UI and persisted command result reported recovery of 9 history items. Every event present in the pre-operation backup was preserved. Historical task execution was not resumed; earlier red error entries remain historical records.
+
+## 2026-11-06: publication check for repair and pressure fixes
+
+The development thread reported that the affected original conversation was resumed after the balanced-tool-tail fix, but the computer connection was lost while automatic compaction was still running. Successful real agent continuation is not confirmed. Earlier manual recovery and short-reply results do not satisfy this newer acceptance target. This publication check did not touch the active conversation or stop the agent.
+
+Independent Spec review found that repaired checkpoints lost their extra logical call cost on reuse. Persisted validated call costs and checksum coverage now preserve that limit; checkpoint format and identity v2 isolate old caches. Regression coverage verifies a four-call limit rejects a six-call repaired tree across invocations, a six-call budget succeeds and replays with the same cost, and altered cost metadata fails validation.
+
+Publication verification in an isolated checkout: syntax checks passed; the full suite with matching extracted native Harness modules passed 41 tests, skipped 2 opt-in live-model tests, and failed 0. Standards and Spec re-reviews found no remaining code blockers. The two live-model tests were not rerun to avoid contention with the active local task. Only plugin source, documentation and synthetic tests are published; MIT and the fresh-Windows validation caveat are retained.

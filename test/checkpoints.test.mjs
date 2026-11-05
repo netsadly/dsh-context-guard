@@ -77,3 +77,50 @@ test('nested provider overflows resume below persisted subdivision decisions', a
   }
   assert.ok(result); assert.ok(failed.size >= 2);
 });
+
+test('resumed repaired summaries retain their full logical call cost', async () => {
+  for (const maxCalls of [4, 6]) {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-repair-cost-test-'));
+    const input = [{ content: 'x'.repeat(65000) }];
+    const repairConfig = configOf({ maxCalls });
+    let physicalCalls = 0; let result; let lastError;
+    for (let attempt = 0; attempt < 5 && !result; attempt++) {
+      try {
+        result = await summarizeBounded(input, { config: repairConfig, capacity: 30208,
+          checkpoints: checkpointStore(root, { input, repairConfig }), maxNewCalls: 2,
+          complete: async request => {
+            physicalCalls++;
+            return { finish: 'stop', text: request[0].content[0].text.includes('exactly seven nonempty lines') ? summary(1) : 'Goal: incomplete' };
+          }
+        });
+      } catch (error) {
+        lastError = error;
+        if (error.code === 'CALL_LIMIT') break;
+        assert.equal(error.code, 'CHECKPOINT_PAUSE');
+      }
+    }
+    if (maxCalls === 4) {
+      assert.equal(result, undefined);
+      assert.equal(lastError.code, 'CALL_LIMIT');
+      assert.equal(physicalCalls, 4);
+    } else {
+      assert.equal(result.calls, 6);
+      assert.equal(physicalCalls, 6);
+      const replay = await summarizeBounded(input, { config: repairConfig, capacity: 30208,
+        checkpoints: checkpointStore(root, { input, repairConfig }), complete: async () => assert.fail('must reuse') });
+      assert.equal(replay.calls, 6);
+    }
+  }
+});
+
+test('checkpoint call cost is validated and covered by the checksum', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-repair-cost-test-'));
+  const identity = { session: 'cost-corruption' };
+  const store = checkpointStore(root, identity);
+  await assert.rejects(store.put('part', summary(1), 0));
+  await store.put('part', summary(1), 2);
+  await writeFile(join(root, digest(identity), `${digest('part')}.json`), JSON.stringify({
+    version: 2, key: digest('part'), text: summary(1), calls: 1, checksum: digest({ text: summary(1), calls: 2 })
+  }));
+  await assert.rejects(store.get('part'), /valid recovery checkpoint/);
+});

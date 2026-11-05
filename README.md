@@ -97,6 +97,14 @@ Manual `recover` now saves validated intermediate summaries under `~/.dsh/contex
 - Desktop manual commands were observed to abort after about five minutes, even with the plugin's 600-second limit. The shorter summary prompt reduces work, but cannot override the host deadline; slow models or very large records can still fail safely without committing a replacement.
 - Internal Harness APIs are version-pinned; revalidate on every Harness update.
 
+## Latest fixes and validation
+
+Missing mandatory summary sections trigger at most one regeneration from the original bounded source using a distinct corrective prompt. Repair calls count toward both invocation and logical-tree limits, including after checkpoint reuse. Checkpoint format/identity v2 isolates older caches; updating may recompute recovery progress while leaving original session history intact.
+
+Under hard input pressure, compaction can include completed, balanced tool-call/result groups while retaining the newest human instruction. It avoids recompressing a lone checkpoint. A proactive threshold is not a hard input limit; final request guarding still applies.
+
+The latest original-conversation continuation trial lost its computer connection during automatic compaction. Successful continuation through real agent steps is **not yet confirmed**. This publication does not certify that trial; the publishing check did not restart, resume or stop the local agent.
+
 ## Recorded recovery result
 
 The [validation record](docs/VALIDATION.md) describes one successful restart/resume trial: 46 history items recovered, all 440 original events unchanged, and padded input estimates reduced from 81,598 to 9,724. A subsequent short reply made no tool calls. These are historical, version-specific observations, not a new live recovery test for this documentation change. They do not establish resumed historical tasks, complete factual retention or recovery of every crashed session.

@@ -22,11 +22,11 @@ test('native bundle patch disables the old service and inserts the replacement',
 });
 test('native Harness compaction preserves events, persists, and rolls back malformed streams', { skip: !root }, async t => {
   const native = name => import(pathToFileURL(join(root, '@deepseek-ai', name, 'lib/index.js')));
-  const [{ Context }, { SessionStore }, { BasicCompactionEngine }, { toolPairingBalancedBefore }, { BlockAssembler, createUserMessage, CONTEXT_WINDOW_EXCEEDED_CODE }] = await Promise.all(['cordis', 'dsh-session', 'dsh-compaction-basic', 'dsh-compaction', 'dsh-llm'].map(native));
+  const [{ Context }, { SessionStore }, { BasicCompactionEngine }, { toolPairingBalancedBefore, toolPairingBalancedAfter }, { BlockAssembler, createUserMessage, CONTEXT_WINDOW_EXCEEDED_CODE }] = await Promise.all(['cordis', 'dsh-session', 'dsh-compaction-basic', 'dsh-compaction', 'dsh-llm'].map(native));
   const oldFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ data: [{ id: 'test', type: 'llm', state: 'loaded', loaded_context_length: 30208 }] }) });
   try {
-    for (const mode of ['complete', 'eof', 'cancel', 'malformed', 'resume']) await t.test(mode, async () => {
+    for (const mode of ['complete', 'eof', 'cancel', 'malformed', 'repair', 'resume']) await t.test(mode, async () => {
       const ctx = new Context();
       const store = new SessionStore(ctx);
       const session = store.prepare('synthetic', { meta: { cwd: process.cwd() } });
@@ -45,12 +45,14 @@ test('native Harness compaction preserves events, persists, and rolls back malfo
       let command;
       ctx.provide('commands', { register(value) { command = value; } });
       const controller = new AbortController();
+      let summaryCalls = 0;
       ctx.provide('llm', { async *stream() {
-        yield { type: 'text-delta', index: 0, text: mode === 'malformed' ? 'not a checkpoint' : summary };
+        summaryCalls++;
+        yield { type: 'text-delta', index: 0, text: (mode === 'malformed' || (mode === 'repair' && summaryCalls === 1)) ? 'not a checkpoint' : summary };
         if (mode === 'cancel') controller.abort(new Error('cancelled'));
         if (mode !== 'eof') yield { type: 'finish', reason: { kind: 'stop' } };
       } });
-      const Plugin = createGuardPlugin({ BasicCompactionEngine, toolPairingBalancedBefore, BlockAssembler, overflowCode: CONTEXT_WINDOW_EXCEEDED_CODE, makeCounter: () => async (_, messages) => estimate(messages), checkpointRoot: await mkdtemp(join(tmpdir(), 'dsh-native-checkpoints-')) });
+      const Plugin = createGuardPlugin({ BasicCompactionEngine, toolPairingBalancedBefore, toolPairingBalancedAfter, BlockAssembler, overflowCode: CONTEXT_WINDOW_EXCEEDED_CODE, makeCounter: () => async (_, messages) => estimate(messages), checkpointRoot: await mkdtemp(join(tmpdir(), 'dsh-native-checkpoints-')) });
       const plugin = new Plugin(ctx);
       const agent = { session, options: { provider: 'lmstudio', model: 'test' }, runMaintenance: fn => fn(controller.signal) };
       let attempts = 1;
@@ -64,7 +66,7 @@ test('native Harness compaction preserves events, persists, and rolls back malfo
         do { next = await command.handler(invocation); attempts++; } while (/Recovery paused/.test(next.text) && attempts < 10);
         assert.match(next.text, /^Recovered/);
         assert.equal(session.surface.replaceGeneration, 1);
-      } else if (mode === 'complete') {
+      } else if (mode === 'complete' || mode === 'repair') {
         const result = await plugin.compactNow(agent, controller.signal);
         assert.ok(result.shadowedSeqs.length > 0);
         assert.equal(session.surface.replaceGeneration, 1);
@@ -83,3 +85,19 @@ test('native Harness compaction preserves events, persists, and rolls back malfo
 });
 
 
+
+test('native pairing selection includes completed results and excludes unfinished groups', {skip:!root}, async()=>{
+ const {toolPairingBalancedBefore,toolPairingBalancedAfter}=await import(pathToFileURL(join(root,'@deepseek-ai/dsh-compaction/lib/index.js')));
+ const Plugin=createGuardPlugin({BasicCompactionEngine:class{},toolPairingBalancedBefore,toolPairingBalancedAfter});
+ const plugin=Object.create(Plugin.prototype);plugin.guard={retainTokens:2000};
+ const events=[{seq:0,type:'system/message',data:{}},{seq:1,type:'user/message',data:{source:{kind:'compact-checkpoint'}}},{seq:2,type:'assistant/message',data:{message:{content:[{type:'tool-call'},{type:'tool-call'}]}}},{seq:3,type:'tool/result',data:{}},{seq:4,type:'tool/result',data:{}}];
+ const session={surface:{nodes:[0,1,2,3],replaceGeneration:0},eventAt:i=>events[i],deriveEventMessage:()=>({content:'x'.repeat(8000)})};
+ assert.equal(plugin.selectRange(session,true),null); // Incomplete pair leaves only checkpoint.
+ session.surface.nodes.push(4);
+ assert.deepEqual(plugin.selectRange(session,true),{start:1,end:4});
+ assert.equal(plugin.selectRange(session,false),null); // Do not recompress sole checkpoint.
+ events.push({seq:5,type:'user/message',data:{source:{kind:'human'}}});session.surface.nodes.push(5);
+ assert.deepEqual(plugin.selectRange(session,true),{start:1,end:4});
+ const onlyCheckpoint={...session,surface:{nodes:[0,1,5],replaceGeneration:0}};
+ assert.equal(plugin.selectRange(onlyCheckpoint,true),null);
+});
