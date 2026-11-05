@@ -1,0 +1,28 @@
+// Prepare an offline, machine-specific bundle; never upload its output.
+import { readFile, writeFile, mkdir, cp, readdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { resolve, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+const [hostModules, sdkEntry] = process.argv.slice(2);
+if (!hostModules || !sdkEntry) throw new Error('Usage: node scripts/prepare-local.mjs <Harness node_modules path> <SDK index.mjs>');
+const out = resolve('private/local-plugin');
+await mkdir(out, { recursive: true });
+let entry = await readFile('index.mjs', 'utf8');
+for (const name of ['dsh-compaction-basic', 'dsh-compaction', 'dsh-llm']) entry = entry.replace(`'@deepseek-ai/${name}'`, JSON.stringify(pathToFileURL(join(resolve(hostModules), '@deepseek-ai', name, 'lib/index.js')).href));
+entry = entry.replace("'@lmstudio/sdk'", JSON.stringify(pathToFileURL(resolve(sdkEntry)).href));
+const hash = createHash('sha256').update(entry);
+for (const file of (await readdir('lib')).sort()) hash.update(await readFile(join('lib', file)));
+const runtimeName = `runtime-${hash.digest('hex').slice(0, 12)}`;
+const runtime = join(out, runtimeName);
+await mkdir(runtime, { recursive: true });
+await cp('lib', join(runtime, 'lib'), { recursive: true });
+await writeFile(join(runtime, 'index.mjs'), entry);
+const manifest = JSON.parse(await readFile('package.json', 'utf8'));
+manifest.main = `./${runtimeName}/index.mjs`;
+delete manifest.peerDependencies;
+delete manifest.dependencies;
+delete manifest.scripts;
+await writeFile(join(out, 'package.json'), JSON.stringify(manifest, null, 2));
+const patch = (await readFile('cordis.patch.yml', 'utf8')).replace('name: dsh-context-guard', `name: '${pathToFileURL(join(runtime, 'index.mjs')).href}'`);
+await writeFile(join(out, 'cordis.patch.yml'), patch);
+console.log(out);

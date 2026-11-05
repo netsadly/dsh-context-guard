@@ -1,0 +1,13 @@
+{
+  "name": "dsh-context-guard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.mjs",
+  "description": "Bounded local-context compaction for DeepSeek Harness",
+  "scripts": { "test": "node --test test/*.test.mjs", "check": "node --check index.mjs && node --check lib/core.mjs && node --check lib/plugin.mjs" },
+  "engines": { "node": ">=22" },
+  "dependencies": { "@lmstudio/sdk": "1.5.0" },
+  "peerDependencies": { "@deepseek-ai/dsh-compaction-basic": "0.2.1-rc.5", "@deepseek-ai/dsh-compaction": "0.2.1-rc.5", "@deepseek-ai/dsh-llm": "0.2.1-rc.5" },
+  "dsh": { "manifestVersion": 1, "bundle": { "patch": "./cordis.patch.yml" }, "capabilities": ["network:egress"] }
+}

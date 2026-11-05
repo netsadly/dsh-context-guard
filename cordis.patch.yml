@@ -1,0 +1,14 @@
+- id: compaction-basic
+  disabled: true
+- insert:
+    - id: context-guard
+      name: dsh-context-guard
+      config:
+        provider: lmstudio
+        baseURL: http://127.0.0.1:1234
+        outputTokens: 8192
+        summaryTokens: 2048
+        safetyTokens: 2048
+        thresholdRatio: 0.8
+        retainTokens: 2000
+        timeoutMs: 600000
