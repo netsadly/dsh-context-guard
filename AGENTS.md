@@ -6,4 +6,4 @@
 - Run affected tests. Native and live tests require explicit environment settings; report skipped tests honestly.
 - Never include personal session logs, recovery checkpoints, credentials, host modules or generated local bundles in commits/uploads.
 - Back up valuable sessions independently before live recovery. Never resume the historical task as part of recovery verification.
-- Keep the GitHub repository private. Public visibility, public releases and licensing require a separate user decision.
+- The owner authorized public plugin-source publication under MIT. Keep publication limited to reviewed plugin files and history; other projects and private data remain excluded. Changes to licensing or publication scope require a separate user decision.

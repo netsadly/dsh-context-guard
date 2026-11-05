@@ -1,10 +1,10 @@
 # dsh-context-guard
 
-[中文介绍、安装教程与使用说明](README.zh-CN.md) · [开源声明草案](docs/OPEN_SOURCE_STATEMENT.zh-CN.md)
+[中文介绍、安装教程与使用说明](README.zh-CN.md) · [开源声明](docs/OPEN_SOURCE_STATEMENT.zh-CN.md)
 
-Framework designed by the author **netsadly**; implementation code written by **GPT Astra**. This is an independent community project, not an official DeepSeek, LM Studio or OpenAI product. Only this plugin's source, documentation and synthetic tests are in scope for a future public release; the author's other projects and private data are excluded. The repository remains private, and a formal license has not yet been selected.
+Framework designed by the author **netsadly**; implementation code written by **GPT Astra**. This is an independent community project, not an official DeepSeek, LM Studio or OpenAI product. Only this plugin's source, documentation and synthetic tests are published; the author's other projects and private data are excluded. The plugin is licensed under the [MIT License](LICENSE), copyright (c) 2026 netsadly. See [third-party license notes](THIRD_PARTY_NOTICES.md) for dependencies. The package remains npm-private to prevent accidental registry publication; this does not restrict the MIT license.
 
-Private experimental context guard for **DeepSeek Harness 0.2.1-rc.5 + LM Studio**. Not a public release. This replaces the native `compaction-basic` service while retaining its transactional session replacement machinery.
+Experimental MIT-licensed context guard for **DeepSeek Harness 0.2.1-rc.5 + LM Studio**. This source release replaces the native `compaction-basic` service while retaining its transactional session replacement machinery.
 
 ## What it does
 
@@ -18,17 +18,44 @@ Private experimental context guard for **DeepSeek Harness 0.2.1-rc.5 + LM Studio
 
 The budget is a **padded estimate**, not an exact measurement of the provider's chat template. This cannot fix every `max-tokens` result: a single long answer or long reasoning can legitimately exhaust its output allowance.
 
+## Before installation
+
+**Validation gap:** No fresh Windows environment was available. The complete Harness installation, startup, enable/disable and native-service restoration workflow has **not been verified on a fresh Windows installation**. An isolated dependency install on the existing machine is not a substitute for that test.
+
+Support is limited to **Harness 0.2.1-rc.5, local LM Studio and text conversations**. Enabling this plugin disables the global native `compaction-basic` entry, affecting more than the current conversation. Other providers do not receive this plugin's compaction protection; do not assume native compaction remains available as a fallback. Before switching providers or using multimodal content, disable this plugin, restart while idle and verify the native service is restored. Image/audio/file blocks are rejected. Revalidate after host updates.
+
 ## Installation
 
-Keep this repository private until installation/recovery validation is complete. Do not upload `private/`, transcripts, backups, machine-specific entry points or host dependencies.
+The source release is experimental and carries the validation gap above. Do not upload `private/`, transcripts, backups, machine-specific entry points or host dependencies.
 
-For a normal development environment, install the pinned SDK dependency and provide the matching Harness peer dependencies. Add the package via Harness's plugin UI. `cordis.patch.yml` replaces the `compaction-basic` entry.
+From the repository root, choose **exactly one** SDK route below and continue in the same PowerShell window. Both require `@lmstudio/sdk` **1.5.0** and Node.js 22 or newer.
 
-For offline desktop testing, reuse the installed host modules and an installed `@lmstudio/sdk` 1.5.0:
+**A: Reuse an existing SDK** (the previously recorded desktop acceptance route). Replace the example with its real entry; skip B:
 
 ```powershell
-node scripts/prepare-local.mjs '<Harness app.asar/dsh/node_modules>' '<installed SDK/dist/index.mjs>'
+$sdkEntry = 'C:\SDK\node_modules\@lmstudio\sdk\dist\index.mjs'
 ```
+
+**B: Install the SDK into this checkout** (requires npm access):
+
+```powershell
+npm ci --ignore-scripts --legacy-peer-deps
+if ($LASTEXITCODE -ne 0) { throw 'SDK installation failed; stop and investigate' }
+$sdkEntry = Join-Path (Get-Location) 'node_modules\@lmstudio\sdk\dist\index.mjs'
+```
+
+`npm ci` uses the committed lockfile; `--legacy-peer-deps` leaves native peer dependencies to the existing Harness installation. Dependency installation scripts are disabled. This is not a clean-machine desktop acceptance claim.
+
+Generate the offline desktop bundle using the SDK selected above. Replace only the example host path:
+
+```powershell
+$hostModules = 'C:\Apps\DeepSeek Harness\resources\app.asar\dsh\node_modules'
+# Keep $sdkEntry from A or B; do not assign it again.
+if (-not $sdkEntry -or -not (Test-Path -LiteralPath $sdkEntry -PathType Leaf)) { throw 'SDK entry missing; check the selected route' }
+node scripts/prepare-local.mjs $hostModules $sdkEntry
+```
+
+The script checks that the SDK entry is a readable file before creating or replacing configuration. It does not verify the SDK version, its transitive dependencies or host modules inside Electron's `app.asar` archive. Successful generation does not prove plugin startup. Use the matching host version and verify running status after installation.
 
 Install the printed `private/local-plugin` directory through Harness's **Plugins → Add plugin** dialog. This generated bundle uses absolute paths and must remain at its generated location. Regenerate it after changing source, then restart Harness while idle to load the new entry. Runtime directories are content-addressed, including resolved dependency paths. Never distribute the generated bundle to another machine. Do not remove or update the referenced SDK installation while the plugin is enabled.
 
@@ -61,7 +88,7 @@ Native tests exercise the real Session and BasicCompactionEngine transaction cod
 
 ## Limitations
 
-Manual `recover` now saves validated intermediate summaries under `~/.dsh/context-guard-checkpoints`. Each invocation starts at most two new model calls, with a 210-second summary deadline, then reports **Recovery paused**. Run the same command again until it reports **Recovered**; an application restart does not discard completed checkpoints. Only the final native transaction replaces context. This does not resume the historical task. Exact input/session/model/configuration/prompt changes isolate cached work. Corrupt checkpoints fail closed. These files contain private summaries, are retained locally, and are not uploaded; deleting them while Harness is idle only discards recovery progress. Automatic proactive compaction retains its existing behavior and does not use this manual checkpoint store.
+Manual `recover` now saves validated intermediate summaries under `~/.dsh/context-guard-checkpoints`. Each invocation starts at most two new model calls, with a 210-second summary deadline, then reports **Recovery paused**. Run the same command again until it reports **Recovered**; an application restart does not discard completed checkpoints. Only the final native transaction replaces context. This does not resume the historical task. Exact input/session/model/configuration/prompt changes isolate cached work. Corrupt checkpoints fail closed. These files are **unencrypted, plaintext JSON** containing private summaries. The plugin retains them locally and does not upload them to GitHub; host, operating-system, backup and sync behavior is outside its guarantees. Checksums detect accidental corruption, not malicious tampering or authenticity: a writer can change both content and checksum; deleting them while Harness is idle only discards recovery progress. Automatic proactive compaction retains its existing behavior and does not use this manual checkpoint store.
 
 - Text-only local provider; unsupported image/audio/file blocks fail closed. Other providers do not get this plugin's compaction behavior while it replaces the global service.
 - SDK 1.5.0 cannot cancel `countTokens` RPCs. Caller cancellation/timeouts stop waiting; one outstanding RPC is retained until it settles, and further tokenization is rejected rather than accumulated. Restart the plugin if the SDK connection never settles.
@@ -69,6 +96,10 @@ Manual `recover` now saves validated intermediate summaries under `~/.dsh/contex
 - Summaries are lossy and can contain model mistakes. Heading validation checks structure, not factual completeness. The original record is the recovery authority.
 - Desktop manual commands were observed to abort after about five minutes, even with the plugin's 600-second limit. The shorter summary prompt reduces work, but cannot override the host deadline; slow models or very large records can still fail safely without committing a replacement.
 - Internal Harness APIs are version-pinned; revalidate on every Harness update.
+
+## Recorded recovery result
+
+The [validation record](docs/VALIDATION.md) describes one successful restart/resume trial: 46 history items recovered, all 440 original events unchanged, and padded input estimates reduced from 81,598 to 9,724. A subsequent short reply made no tool calls. These are historical, version-specific observations, not a new live recovery test for this documentation change. They do not establish resumed historical tasks, complete factual retention or recovery of every crashed session.
 
 ## Review policy
 

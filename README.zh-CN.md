@@ -1,6 +1,6 @@
 # Context Guard：Harness 上下文保护与会话恢复插件
 
-**私有测试版，尚未公开发布。** 已验证宿主：DeepSeek Harness **0.2.1-rc.5**；模型服务：本机 LM Studio。其他版本尚需验证。
+**MIT 开源实验版。** 已验证宿主：DeepSeek Harness **0.2.1-rc.5**；模型服务：本机 LM Studio。其他版本尚需验证。
 
 ## 作者与实现
 
@@ -24,6 +24,12 @@
 - 全部完成后才通过原生事务提交；部分完成、截断或取消不提交不完整替换。
 - 原始事件保留；恢复命令不继续执行历史任务。
 
+## 安装前须知
+
+**验证缺口：没有全新的 Windows 环境。完整的 Harness 安装、启动、启用／停用及原生服务恢复流程，尚未在全新 Windows 系统上验证。** 现有电脑中的隔离依赖安装测试不能替代这项验收。
+
+本版仅针对 **Harness 0.2.1-rc.5、本机 LM Studio、文本会话**。启用会停用全局原生 `compaction-basic`，影响不限于当前会话。其他提供方不会获得本插件的压缩保护，也不能假定仍有原生压缩兜底。切换提供方或使用多模态前，先停用本插件、空闲重启并确认原生服务恢复。图片、音频、文件块会被拒绝；升级宿主后需重新验证。
+
 ## 安装教程（Windows）
 
 ### 1. 准备环境
@@ -34,7 +40,7 @@
 
 ### 2. 获取源码
 
-将插件单独放入可长期保留的目录。私有阶段需要仓库访问权限：
+将插件单独放入可长期保留的目录：
 
 ```powershell
 git clone https://github.com/netsadly/dsh-context-guard.git
@@ -45,17 +51,23 @@ Set-Location dsh-context-guard
 
 ### 3. 准备 SDK
 
-插件使用 `@lmstudio/sdk` 1.5.0。已有此版本时可直接复用其 `dist/index.mjs` 完整路径，本机验收采用这条路线。
+插件使用 `@lmstudio/sdk` **1.5.0**。以下 A、B **只选一个**，并在同一个 PowerShell 窗口继续第 4 步。
 
-没有现成 SDK 时，可在插件目录安装依赖：
+**A：复用已安装的 1.5.0 SDK**（此前本机验收路线）。替换示例为真实入口；不要再执行 B：
 
 ```powershell
-npm install --ignore-scripts --legacy-peer-deps
-$sdkEntry = Join-Path (Get-Location) 'node_modules\@lmstudio\sdk\dist\index.mjs'
-Test-Path -LiteralPath $sdkEntry
+$sdkEntry = 'C:\SDK\node_modules\@lmstudio\sdk\dist\index.mjs'
 ```
 
-最后应输出 `True`。此路线需要 npm 网络，尚未完成干净机器安装验收。`--legacy-peer-deps` 让原生宿主依赖由现有 Harness 提供。
+**B：在插件目录新装 SDK**（需要 npm 网络；不等于已完成干净机器桌面验收）：
+
+```powershell
+npm ci --ignore-scripts --legacy-peer-deps
+if ($LASTEXITCODE -ne 0) { throw 'SDK 安装失败，请停止并排查' }
+$sdkEntry = Join-Path (Get-Location) 'node_modules\@lmstudio\sdk\dist\index.mjs'
+```
+
+`npm ci` 使用仓库锁文件固定依赖树；`--legacy-peer-deps` 让原生宿主依赖由现有 Harness 提供。`--ignore-scripts` 不运行依赖安装脚本。SDK 及宿主仍需验证版本和运行兼容性。
 
 ### 4. 生成安装目录
 
@@ -63,12 +75,12 @@ Test-Path -LiteralPath $sdkEntry
 
 ```powershell
 $hostModules = 'C:\Apps\DeepSeek Harness\resources\app.asar\dsh\node_modules'
-# 如果复用现成 SDK，请替换为其真实 dist/index.mjs 路径。
-$sdkEntry = Join-Path (Get-Location) 'node_modules\@lmstudio\sdk\dist\index.mjs'
+# 保留第 3 步选择的 SDK 路径，不要重新赋值。
+if (-not $sdkEntry -or -not (Test-Path -LiteralPath $sdkEntry -PathType Leaf)) { throw 'SDK 入口不存在，请检查第 3 步' }
 node scripts/prepare-local.mjs $hostModules $sdkEntry
 ```
 
-`app.asar` 是 Electron 归档，内部路径不一定能像普通文件夹一样浏览。脚本生成供 Harness/Electron 使用的绝对导入地址，不应指向不同版本的宿主。
+`app.asar` 是 Electron 归档，内部路径不一定能像普通文件夹一样浏览。脚本在创建或覆盖配置前检查 SDK 入口是可读文件，随后生成供 Harness/Electron 使用的绝对导入地址。它不校验 SDK 版本、依赖完整性或归档内的宿主模块；生成成功不代表插件已启动。不应指向不同版本的宿主。
 
 生成目录为 `private/local-plugin`。它含本机路径，**只供本机安装，不上传 GitHub、不发给别人直接安装**。安装后不要移动或删除源码目录、生成目录和引用的 SDK。
 
@@ -110,7 +122,7 @@ node scripts/prepare-local.mjs $hostModules $sdkEntry
 
 ### 检查点、备份、更新和停用
 
-检查点位于 `%USERPROFILE%\.dsh\context-guard-checkpoints`，含私人摘要，仅保存在本机，不上传 GitHub。暂不自动清理；Harness 空闲时删除对应检查点只会丢失恢复进度，不会删除原始会话。
+检查点位于 `%USERPROFILE%\.dsh\context-guard-checkpoints`，为**未加密的本地明文 JSON**，含私人摘要。本插件不会将这些文件上传 GitHub；宿主、操作系统、备份或同步软件的复制和上传行为不在插件保证范围内。校验和用于发现意外损坏，不是认证或防篡改机制；能改写文件及校验和的人仍可能伪造内容。暂不自动清理；Harness 空闲时删除对应检查点只会丢失恢复进度，不会删除原始会话。
 
 会话通常位于 `%USERPROFILE%\.dsh\sessions` 下，文件名为 `session.v4.jsonl.zstd`。备份保留原文件并核对 SHA-256，不覆盖正在使用的记录，不提交个人备份到本仓库。
 
@@ -142,6 +154,10 @@ node scripts/prepare-local.mjs $hostModules $sdkEntry
 - 检查点损坏：停止恢复，不使用损坏摘要。先保留目录供排查，空闲时将其移出检查点目录后重试。
 - 摘要有损；这是上下文保护插件，不是保证所有事实永不遗漏的记忆系统。
 
-## 开源计划
+## 已记录的恢复结果
 
-见 [开源声明草案](docs/OPEN_SOURCE_STATEMENT.zh-CN.md)。仓库仍私有，公开时间和正式许可证由作者另行决定；本次准备材料不改变其他项目的可见性。
+[验收记录](docs/VALIDATION.md)记录了一次重启续跑成功：46 个历史项完成恢复，440 条原始事件保持不变，带余量的输入估算由 81,598 降至 9,724。随后短回复验收没有工具调用。这是特定版本和会话的历史验收记录，本次文档修改未重跑真实恢复；不表示历史任务已恢复执行、所有事实完整保留或任意崩溃会话都能恢复。
+
+## 开源与许可
+
+本插件使用 [MIT 许可证](LICENSE)，版权署名为 Copyright (c) 2026 netsadly。见 [开源声明](docs/OPEN_SOURCE_STATEMENT.zh-CN.md) 和 [第三方许可说明](THIRD_PARTY_NOTICES.md)。公开范围仅限本插件，不包含作者其他项目或私人资料。`package.json` 保留 `private: true` 以避免误发 npm，不影响 MIT 授权。

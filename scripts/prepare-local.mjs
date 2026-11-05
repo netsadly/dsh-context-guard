@@ -1,15 +1,20 @@
 // Prepare an offline, machine-specific bundle; never upload its output.
-import { readFile, writeFile, mkdir, cp, readdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, cp, readdir, stat, access } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 const [hostModules, sdkEntry] = process.argv.slice(2);
 if (!hostModules || !sdkEntry) throw new Error('Usage: node scripts/prepare-local.mjs <Harness node_modules path> <SDK index.mjs>');
+// Validate before creating or replacing any generated configuration.
+const sdkPath = resolve(sdkEntry);
+if (!(await stat(sdkPath)).isFile()) throw new Error('SDK entry must be a readable file: dist/index.mjs');
+await access(sdkPath, constants.R_OK);
 const out = resolve('private/local-plugin');
 await mkdir(out, { recursive: true });
 let entry = await readFile('index.mjs', 'utf8');
 for (const name of ['dsh-compaction-basic', 'dsh-compaction', 'dsh-llm']) entry = entry.replace(`'@deepseek-ai/${name}'`, JSON.stringify(pathToFileURL(join(resolve(hostModules), '@deepseek-ai', name, 'lib/index.js')).href));
-entry = entry.replace("'@lmstudio/sdk'", JSON.stringify(pathToFileURL(resolve(sdkEntry)).href));
+entry = entry.replace("'@lmstudio/sdk'", JSON.stringify(pathToFileURL(sdkPath).href));
 const hash = createHash('sha256').update(entry);
 for (const file of (await readdir('lib')).sort()) hash.update(await readFile(join('lib', file)));
 const runtimeName = `runtime-${hash.digest('hex').slice(0, 12)}`;

@@ -39,6 +39,23 @@ Environment: DeepSeek Harness 0.2.1-rc.5, LM Studio SDK 1.5.0, local text model 
 
 ## Review and limitations
 
+### Installation documentation follow-up — 2026-11-06
+
+- In an isolated Windows checkout with no existing `node_modules`, generated lockfile v3 and ran `npm ci --ignore-scripts --legacy-peer-deps`: 12 packages installed, SDK 1.5.0 entry present and import succeeded without contacting a model. All locked dependency URLs use the public npm registry and have SHA-512 integrity fields. This verifies dependency installation, not a clean Windows VM or desktop lifecycle.
+- Bundle generation with the newly installed SDK and a synthetic host path succeeded. Tests cover SDK path-sensitive imports, missing/directory SDK rejection before output creation, and preservation of existing configuration on invalid input. Host archive contents, SDK version and transitive imports are not validated by the generator itself.
+- Syntax checks passed. Default suite: **23 passed, 3 skipped, 0 failed** (26 top-level tests). The native Harness tests and opt-in live-model test were skipped; historical counts above include nested native tests and are not results of this run.
+- No live plugin was installed, enabled, disabled or restarted. No personal session or loaded model was used. Clean-machine desktop installation/startup/disable acceptance remains unverified for the new-install route.
+- Reviewed all locally reachable history file names and scanned all 62 historical blobs across 18 commits for common credential/private-key patterns and personal Windows paths: no matches or unexpected project files found. The source repository's reflog also covered 18 commits. This limited local review does not prove absence of arbitrary sensitive prose, unknown secret formats, unreachable objects or remote-only history; recheck the complete intended publication history before any public release.
+- Independent Standards and Spec reviews found no remaining blockers after correcting the Chinese SDK reassignment and adding the lockfile. Changes remain local; no publication or licensing decision was made.
+
+### MIT source publication preparation — 2026-11-06
+
+- The owner subsequently selected MIT and authorized publication of this plugin only. Added the standard MIT license using the existing author identity, `netsadly`, and year 2026. Dependency licenses and the upstream metadata/LICENSE discrepancy are documented in `THIRD_PARTY_NOTICES.md`; no dependency binaries or source copies are included.
+- Both READMEs and the publication statement explicitly disclose that no fresh Windows environment was available and that full Harness startup/enable/disable/native-service restoration on fresh Windows remains unverified. Existing-machine dependency installation does not substitute for that acceptance.
+- GitHub's complete Git refs response contained only `refs/heads/main` at `e8e0c8d`; its five-commit ancestry reaches the root. Reviewed all 37 distinct remote historical blobs (33 match the audited local history; four additional source/test versions were inspected). No other project files or common secret patterns were found. Local development history has 18 commits and is distinct from the remote snapshot history; publication preserves the remote ancestry rather than force-pushing local history.
+- Re-ran syntax checks and the default suite: **23 passed, 3 skipped, 0 failed**. Native and live-model tests remain skipped. Publication does not imply fresh-Windows or new live recovery acceptance.
+- History and content checks reduce risk but cannot prove the absence of every possible sensitive string. The publication excludes ignored private directories, generated bundles, host dependencies, sessions and backups.
+
 Standards and Spec were reviewed separately. Blocking findings were fixed with regression coverage for terminal stream detection, cancellation, pending-message accounting, import generation, tokenizer single-flight behavior and native bundle patching.
 
 Text-only and local-provider scope remains intentional. Token counts include conservative padding but are not exact provider chat-template accounting. Summaries are lossy; structure validation cannot prove factual completeness. Original session events and an independent local backup remain the authority. Private logs, backups and generated installation files are excluded from this repository.
