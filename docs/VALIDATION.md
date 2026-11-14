@@ -79,3 +79,9 @@ The development thread reported that the affected original conversation was resu
 Independent Spec review found that repaired checkpoints lost their extra logical call cost on reuse. Persisted validated call costs and checksum coverage now preserve that limit; checkpoint format and identity v2 isolate old caches. Regression coverage verifies a four-call limit rejects a six-call repaired tree across invocations, a six-call budget succeeds and replays with the same cost, and altered cost metadata fails validation.
 
 Publication verification in an isolated checkout: syntax checks passed; the full suite with matching extracted native Harness modules passed 41 tests, skipped 2 opt-in live-model tests, and failed 0. Standards and Spec re-reviews found no remaining code blockers. The two live-model tests were not rerun to avoid contention with the active local task. Only plugin source, documentation and synthetic tests are published; MIT and the fresh-Windows validation caveat are retained.
+
+## 2026-11-15: output reservations and useful advisory compaction
+
+The affected original conversation completed a real file-reading tool task after recovery, retaining all 200 preceding events. A separate three-turn fresh-session comparison reduced compaction attempts from four to two and total task time from 66.156 to 34.629 seconds. Both versions committed two useful compactions; the two non-reducing attempts disappeared. These are small-sample sequential measurements, not a universal speed guarantee. See [detailed results, configuration and limits](OPTIMIZATION-2026-11-15.zh-CN.md). No private logs or sessions are published.
+
+Publication checkout verification: 38 default tests passed, with 7 opt-in tests skipped; 11 native tests separately passed with matching host modules. Live-summary tests were not rerun for publication. Prior interrupted trials above remain historical records, not the current acceptance status.

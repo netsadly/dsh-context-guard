@@ -7,6 +7,36 @@ import { tmpdir } from 'node:os';
 import { createGuardPlugin } from '../lib/plugin.mjs';
 import { estimate } from '../lib/core.mjs';
 
+async function verifyNativeSoftDeferral(mode) {
+  const native=name=>import(pathToFileURL(join(process.env.DSH_TEST_MODULES,'@deepseek-ai',name,'lib/index.js')));
+  const [{Context},{SessionStore},{BasicCompactionEngine},{toolPairingBalancedBefore,toolPairingBalancedAfter},{BlockAssembler,createUserMessage,CONTEXT_WINDOW_EXCEEDED_CODE}]=await Promise.all(['cordis','dsh-session','dsh-compaction-basic','dsh-compaction','dsh-llm'].map(native));
+  const ctx=new Context(); const store=new SessionStore(ctx);const session=store.prepare('nonreducing',{meta:{cwd:process.cwd()}});
+  session.append('turn/start',{turn:1});
+  session.append('user/message',createUserMessage({content:[{type:'text',text:mode==='tiny'?'hello':'synthetic history '.repeat(600)}],source:{kind:'human'}}),{surfaceOp:'append'});
+  const before=session.snapshotEvents();const surface=[...session.surface.nodes];
+  store.flush=async()=>{};
+  ctx.provide('tokenMeter',{estimateMessage:estimate,measure:s=>{const nodes=s.surface.nodes.map(seq=>({seq,tokens:estimate(s.deriveEventMessage(s.eventAt(seq))),heuristicTokens:estimate(s.deriveEventMessage(s.eventAt(seq)))}));return {nodes,totalTokens:nodes.reduce((sum,n)=>sum+n.tokens,0)};}});
+  ctx.provide('commands',{register(){}});ctx.provide('llm',{});
+  const Guard=createGuardPlugin({BasicCompactionEngine,toolPairingBalancedBefore,toolPairingBalancedAfter,BlockAssembler,overflowCode:CONTEXT_WINDOW_EXCEEDED_CODE,makeCounter:()=>async()=>11000});
+  const guard=new Guard(ctx,{outputTokens:2048});
+  guard.measureGuard=async()=>({count:11000,budget:{trigger:10240,available:12800}});
+  guard.selectRange=()=>({start:surface[0],end:surface[0]});
+  let summaryCalls=0;
+  guard.summarize=async()=>{summaryCalls++;return {summary:[{type:'text',text:'Synthetic non-reducing summary. '.repeat(1200)}],provider:'lmstudio',model:'test',maxTokens:2048};};
+  const agent={session,options:{provider:'lmstudio',model:'test'}};
+  assert.equal(await guard.compactIfNeeded(agent,'pressure',new AbortController().signal),null);
+  assert.deepEqual(session.surface.nodes,surface);
+  assert.deepEqual(session.snapshotEvents().slice(0,before.length),before);
+  if(mode==='tiny')assert.deepEqual(session.snapshotEvents(),before);
+  else assert.match(session.snapshotEvents().at(-1).data.error,/summary is not smaller/);
+  const after=session.snapshotEvents();
+  assert.equal(await guard.compactIfNeeded(agent,'pressure',new AbortController().signal),null);
+  assert.deepEqual(session.snapshotEvents(),after);
+  assert.equal(summaryCalls,mode==='tiny'?0:1);
+}
+test('native tiny prefix is deferred without a summary transaction under soft pressure', {skip:!process.env.DSH_TEST_MODULES}, ()=>verifyNativeSoftDeferral('tiny'));
+test('native non-reducing rejection preserves events and is not regenerated for the same span', {skip:!process.env.DSH_TEST_MODULES}, ()=>verifyNativeSoftDeferral('rejected'));
+
 // Point at an installed/extracted Harness node_modules directory. Never ship it.
 const root = process.env.DSH_TEST_MODULES;
 const summary = 'Goal: synthetic test. Constraints: retain history. Completed: checked. Files: none. Failures: none. Pending: verify. Next step: verify.';

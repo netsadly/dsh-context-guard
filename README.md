@@ -6,15 +6,19 @@ Framework designed by the author **netsadly**; implementation code written by **
 
 Experimental MIT-licensed context guard for **DeepSeek Harness 0.2.1-rc.5 + LM Studio**. This source release replaces the native `compaction-basic` service while retaining its transactional session replacement machinery.
 
+## Latest improvements (2026-11-15)
+
+See the [optimization notes and measured results](docs/OPTIMIZATION-2026-11-15.zh-CN.md). This update aligns output reservations, avoids repeated non-reducing soft compaction, and adds bounded growth-based deferral while retaining hard-budget protection.
+
 ## What it does
 
 - Queries the exact **already loaded** model's context capacity before requests; does not load models.
 - Uses LM Studio's tokenizer on serialized messages and tools, adds 10%, 32 tokens per message and 512 framing tokens, and takes the larger value alongside Harness's meter.
-- Reserves the requested output budget plus 2,048 safety tokens. Triggers compaction at 80% of the remaining input budget.
+- Caps valid requested output at configured `outputTokens` and uses the same reservation for preflight and request construction, plus 2,048 default safety tokens. The default advisory threshold is 80% of remaining input; optional attempts can be deferred when unlikely to reduce history.
 - Keeps a recent tail and native tool-call/result boundaries. Large histories are summarized in bounded chunks and merged without tools.
 - Summary-only requests explicitly disable local model thinking. Ordinary conversation reasoning settings are preserved.
 - Rejects empty, malformed, interrupted or truncated checkpoints. Original events remain in the append-only log.
-- Rejects oversized final requests with the native overflow protocol; allows at most one overflow recovery per turn. Invalid historical output caps below 128 are replaced with the configured 8,192-token default.
+- Rejects oversized final requests with the native overflow protocol; allows at most one overflow recovery per turn. Invalid historical output caps are replaced with configured `outputTokens` (default 8,192); valid larger caps are clamped to that ceiling. Configure a smaller output ceiling for a smaller loaded context.
 
 The budget is a **padded estimate**, not an exact measurement of the provider's chat template. This cannot fix every `max-tokens` result: a single long answer or long reasoning can legitimately exhaust its output allowance.
 
@@ -84,7 +88,7 @@ node --test test/live.test.mjs
 
 Default tests require no model or downloaded dependencies. Native tests require matching host modules; live tests are opt-in and send synthetic data only to loopback LM Studio. Skipped integration tests are not passes.
 
-Native tests exercise the real Session and BasicCompactionEngine transaction code with fake LLM, maintenance admission and flush. They verify event retention and terminal marker closure, **not** actual Agent scheduling or disk persistence. Live tests verify tokenizer access and complete model-generated checkpoints. Desktop installation and recovery are separate acceptance steps.
+Native tests exercise real Session and BasicCompactionEngine transactions with synthetic LLM responses, including history retention, persistence, rollback and non-reducing-summary rejection. They are distinct from real Agent scheduling. The latest desktop validation used real tool tasks; see the linked optimization notes for results and limitations. Live summary tests verify tokenizer access and complete model-generated checkpoints; they were not rerun for this publication.
 
 ## Limitations
 
@@ -103,7 +107,7 @@ Missing mandatory summary sections trigger at most one regeneration from the ori
 
 Under hard input pressure, compaction can include completed, balanced tool-call/result groups while retaining the newest human instruction. It avoids recompressing a lone checkpoint. A proactive threshold is not a hard input limit; final request guarding still applies.
 
-The latest original-conversation continuation trial lost its computer connection during automatic compaction. Successful continuation through real agent steps is **not yet confirmed**. This publication does not certify that trial; the publishing check did not restart, resume or stop the local agent.
+An earlier original-conversation trial was interrupted by a computer connection loss. On 2026-11-15, a separate affected-session continuation completed a real file-reading tool task, alongside a three-turn fresh-session comparison. See the [optimization validation notes](docs/OPTIMIZATION-2026-11-15.zh-CN.md) for results and limitations.
 
 ## Recorded recovery result
 

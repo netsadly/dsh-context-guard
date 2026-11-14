@@ -26,3 +26,17 @@ Repair must change the corrective instructions while retaining original source, 
 
 ## Live continuation acceptance
 Default to independent Standards and Spec code-review. Acceptance requires the affected original conversation to resume real agent steps without context-guard failure. Do not stop a successfully running agent just to finish verification. Under hard budget pressure include completed balanced tool groups when retained results cause overflow; never split call/result pairs. Avoid repeatedly summarizing a checkpoint-only prefix. Proactive thresholds are not hard input limits; final request guarding stays mandatory.
+
+## Local output ceiling (2026-11-14)
+
+Treat configured outputTokens as the maximum agent output reservation for the guarded provider. Apply the same ceiling during pre-step pressure checks and agent request construction, including restored sessions with larger historical maxTokens. Preserve valid smaller requests, other providers, and original durable events. Final stream guarding must still budget the actual request; summary output remains separately bounded by summaryTokens.
+
+## Non-reducing soft compaction (2026-11-15)
+
+A native non-reducing-summary rejection before replacement may be treated as a no-op only for advisory pressure when a fresh measurement still fits the hard budget and cancellation has not occurred. Preserve the original history. Do not swallow other summary errors or actual provider overflow; the final request guard remains mandatory.
+
+## Useful advisory compaction (2026-11-15)
+
+Preserve all tools, model settings, output/safety budgets and final-stream checking. Before optional soft-pressure compaction, defer very small selected prefixes that are unlikely to repay a structured checkpoint. Remember an unchanged non-reducing span per session; do not regenerate it at every step. After successful compaction, wait for meaningful measured input growth before another optional attempt. The growth allowance scales with the current available input budget and is bounded. Hard pressure or a provider-confirmed overflow bypasses all these deferrals.
+
+All decisions still re-query the actual loaded model context. Deferral identities must distinguish route, capacity, output budget and surface replacement generation; a changed capacity must not reuse old soft-pressure decisions. Do not change the loaded model to test adaptation: exercise capacity changes with injected responses and final request guards, and perform real multi-turn tool tests at the user's actual loaded capacity. Record comparable fresh-session task timings, actual tool definitions and compaction attempts before and after, excluding human inter-turn delay. Keep failed and interrupted trials separately identified.
