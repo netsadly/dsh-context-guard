@@ -108,3 +108,11 @@ test('truncated and canceled repairs are rejected', async () => {
     })); assert.equal(calls, 2);
   }
 });
+test('markdown and newline headings cannot bypass constraint provenance checks', async () => {
+  for (const headings of [['**Constraints**:', '**Completed**:'], ['# Constraints\n', '# Completed\n']]) {
+    const bad = validSummary.replace('Constraints: preserve.', `${headings[0]} seven sections and 1400 characters.`).replace('Completed:', headings[1]);
+    let calls = 0;
+    const result = await summarizeBounded([{ role: 'user', content: 'Research apples.' }], { config, capacity: 16896, complete: async () => ({ finish: 'stop', text: ++calls === 1 ? bad : validSummary }) });
+    assert.equal(calls, 2); assert.equal(result.text, validSummary);
+  }
+});
