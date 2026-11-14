@@ -2,6 +2,10 @@
 
 **MIT 开源实验版。** 已验证宿主：DeepSeek Harness **0.2.1-rc.5**；模型服务：本机 LM Studio。其他版本尚需验证。
 
+## v0.1.1 更新
+
+新增真实用户指令保留、摘要污染校验和重复无进展时的阶段答复。详见[中文更新与升级方法](docs/RELEASE-v0.1.1.zh-CN.md)及[思考等级加载注意事项](docs/REASONING-LMSTUDIO.zh-CN.md)。插件升级不会自动修改 LM Studio 模型定义或本机配置。
+
 ## 作者与实现
 
 **框架由作者 netsadly 设计，实际代码书写由 GPT Astra 完成。** 作者负责需求、框架方向和验收决策，GPT Astra 辅助完成代码实现、迭代与测试。这是独立社区插件，不代表 DeepSeek、LM Studio 或 OpenAI 的官方产品或背书。AI 参与实现不等于代码绝对正确，测试范围见 [验收报告](docs/VALIDATION.md)。

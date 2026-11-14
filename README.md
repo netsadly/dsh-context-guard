@@ -6,7 +6,9 @@ Framework designed by the author **netsadly**; implementation code written by **
 
 Experimental MIT-licensed context guard for **DeepSeek Harness 0.2.1-rc.5 + LM Studio**. This source release replaces the native `compaction-basic` service while retaining its transactional session replacement machinery.
 
-## Latest improvements (2026-11-15)
+## Latest improvements — v0.1.1 (2026-11-15)
+
+See the [Chinese release notes and upgrade guide](docs/RELEASE-v0.1.1.zh-CN.md) for task-provenance protection, stalled-loop stage answers and LM Studio reasoning-level setup. The plugin does not install model metadata or change your local configuration.
 
 See the [optimization notes and measured results](docs/OPTIMIZATION-2026-11-15.zh-CN.md). This update aligns output reservations, avoids repeated non-reducing soft compaction, and adds bounded growth-based deferral while retaining hard-budget protection.
 
@@ -16,7 +18,7 @@ See the [optimization notes and measured results](docs/OPTIMIZATION-2026-11-15.z
 - Uses LM Studio's tokenizer on serialized messages and tools, adds 10%, 32 tokens per message and 512 framing tokens, and takes the larger value alongside Harness's meter.
 - Caps valid requested output at configured `outputTokens` and uses the same reservation for preflight and request construction, plus 2,048 default safety tokens. The default advisory threshold is 80% of remaining input; optional attempts can be deferred when unlikely to reduce history.
 - Keeps a recent tail and native tool-call/result boundaries. Large histories are summarized in bounded chunks and merged without tools.
-- Summary-only requests explicitly disable local model thinking. Ordinary conversation reasoning settings are preserved.
+- Compaction and stalled-loop stage-answer requests explicitly disable local model thinking. Ordinary conversation reasoning settings are preserved.
 - Rejects empty, malformed, interrupted or truncated checkpoints. Original events remain in the append-only log.
 - Rejects oversized final requests with the native overflow protocol; allows at most one overflow recovery per turn. Invalid historical output caps are replaced with configured `outputTokens` (default 8,192); valid larger caps are clamped to that ceiling. Configure a smaller output ceiling for a smaller loaded context.
 

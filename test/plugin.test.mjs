@@ -21,6 +21,32 @@ function fixture(config = {}) {
   return { hooks, commands, plugin, agent };
 }
 
+test('native request-config hook remains config-only; stalled stream uses bounded answer and new task restores tools', async () => {
+ const {hooks,agent,plugin}=fixture({outputTokens:2048});agent.session.id='loop-test';
+ const events=[{seq:1,type:'user/message',data:{role:'user',source:{kind:'user'},content:[{type:'text',text:'Find model rankings.'}]}}];
+ for(let i=0;i<3;i++)events.push({seq:2+i*2,type:'tool/call',data:{callId:String(i),name:'web_fetch',arguments:'{"url":"https://example.com"}'}},{seq:3+i*2,type:'tool/result',data:{message:{toolCallId:String(i),isError:true,content:[{type:'text',text:'fetch failed'}]}}});
+ agent.session.snapshotEvents=()=>events;
+ let compactions=0;plugin.compactIfNeeded=async()=>{compactions++;};
+ const decision=await hooks.get('agent/pre-step')({agent,signal:new AbortController().signal},async()=>({kind:'enter',messages:[]}));
+ assert.equal(compactions,0);assert.deepEqual(decision.messages,[]);
+ const config=await hooks.get('agent/request')({agent},async()=>({provider:'lmstudio',model:'test',maxTokens:8192}));
+ assert.equal(config.maxTokens,2048);assert.equal(config.messages,undefined);
+ const original=globalThis.fetch;let posted;let forwarded=false;let answer='Insufficient evidence; repeated fetch failed.';
+ globalThis.fetch=async(url,options)=>url.endsWith('/api/v0/models')?{ok:true,json:async()=>({data:[{id:'test',state:'loaded',type:'llm',loaded_context_length:16896}]})}:{ok:true,json:async()=>{posted=JSON.parse(options.body);return {choices:[{finish_reason:'stop',message:{content:answer}}]};}};
+ try {
+  const request={...config,sessionId:'loop-test',messages:[{role:'user',content:[{type:'text',text:'huge '.repeat(20000)}]}],tools:[{name:'web_fetch'}]};
+  const chunks=[];for await(const c of hooks.get('llm/stream')(request,async function*(){forwarded=true;}))chunks.push(c);
+  assert.equal(forwarded,false);assert.match(chunks[0].text,/阶段答复/);assert.equal(posted.reasoning_effort,'none');assert.equal(posted.tools,undefined);assert.equal(request.tools.length,1);
+  answer='   ';const blank=[];for await(const c of hooks.get('llm/stream')(request,async function*(){}))blank.push(c);assert.match(blank[0].text,/未能生成完整/);
+  const aborted={...request,signal:AbortSignal.abort(new Error('user canceled'))};await assert.rejects(async()=>{for await(const c of hooks.get('llm/stream')(aborted,async function*(){})){}},/user canceled/);
+  events.push({seq:9,type:'user/message',data:{source:{kind:'user'},content:[{type:'text',text:'Now inspect a different file.'}]}});
+  await hooks.get('agent/pre-step')({agent,signal:new AbortController().signal},async()=>({kind:'enter',messages:[]}));
+  const small={...request,messages:[{role:'user',content:'new task'}]};
+  for await(const c of hooks.get('llm/stream')(small,async function*(){forwarded=true;yield {type:'finish',reason:{kind:'stop'}};})){}
+  assert.equal(forwarded,true);assert.equal(small.tools.length,1);assert.equal(compactions,1);
+ }finally{globalThis.fetch=original;}
+});
+
 test('soft pressure skips tiny prefixes without spending a summary call; hard pressure still compacts', async()=>{
  const {plugin,agent}=fixture({outputTokens:2048});let calls=0;let count=12000;
  plugin.measureGuard=async()=>({count,budget:{capacity:16896,output:2048,trigger:11520,available:12800}});

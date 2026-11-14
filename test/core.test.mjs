@@ -61,6 +61,20 @@ test('unsupported images and file references are rejected', () => {
 
 
 const validSummary = 'Goal: test. Constraints: preserve. Completed: read. Files: test.txt. Failures: build failed. Pending: fix. Next step: investigate.';
+test('repairs leaked summary instructions and overlong checkpoints before accepting', async () => {
+  for (const bad of [validSummary.replace('preserve.', 'Use seven specific section labels, max 180 words and 1400 characters.'), validSummary.replace('preserve.', 'Respond in plain text only.'), validSummary.replace('Completed: read.', 'Completed: ' + 'data '.repeat(400))]) {
+    let calls = 0;
+    const result = await summarizeBounded([{ role: 'user', content: 'Report model ranks from a few websites.' }], { config, capacity: 16896, complete: async () => ({ finish: 'stop', text: ++calls === 1 ? bad : validSummary }) });
+    assert.equal(calls, 2); assert.equal(result.text, validSummary);
+  }
+});
+test('preserves genuine user format requests and excludes hidden reasoning from summary input', async () => {
+  const requested = validSummary.replace('preserve.', 'Use seven specific section labels and max 180 words.');
+  await summarizeBounded([{ role: 'user', source: { kind: 'user' }, content: 'Use seven specific section labels and max 180 words.' }, { role: 'assistant', content: [{ type: 'reasoning', text: 'invented internal plan' }, { type: 'text', text: 'Observed result.' }] }], { config, capacity: 16896, complete: async messages => {
+    assert.doesNotMatch(messages[1].content[0].text, /invented internal plan/);
+    return { finish: 'stop', text: requested };
+  } });
+});
 test('missing section retries original source and saves only validated repair', async () => {
   const requests = []; const saved = [];
   const result = await summarizeBounded([{ content: 'Build failed: retain this fact' }], { config, capacity: 30208,
