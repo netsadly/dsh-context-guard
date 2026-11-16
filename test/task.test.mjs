@@ -1,5 +1,15 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {taskState,taskAnchor,finalizationMessages} from '../lib/task.mjs';
+test('finalization retains current system instructions in order without reviving stale presets',()=>{
+ const current=[{role:'system',content:[{type:'text',text:'Current persona.'}]},{role:'user',content:[{type:'text',text:'Current task.'}]},{role:'system',content:[{type:'text',text:'Current language.'}]}];
+ const original=structuredClone(current);
+ const events=[{seq:0,type:'system/message',data:{role:'system',content:[{type:'text',text:'Obsolete persona.'}]}}];
+ const messages=finalizationMessages(taskState(events),events,current);
+ assert.deepEqual(messages.slice(0,2),[current[0],current[2]]);
+ assert.doesNotMatch(JSON.stringify(messages),/Obsolete persona/);
+ messages[0].content[0].text='Mutated output';
+ assert.deepEqual(current,original);
+});
 const human=(seq,text)=>({seq,type:'user/message',data:{role:'user',source:{kind:'user'},content:[{type:'text',text}]}});
 const call=(seq,id)=>({seq,type:'tool/call',data:{callId:id,name:'web_fetch',arguments:'{"url":"https://example.com/rank"}'}});
 const result=(seq,id,text='server error')=>({seq,type:'tool/result',data:{message:{toolCallId:id,isError:true,content:[{type:'text',text}]}}});

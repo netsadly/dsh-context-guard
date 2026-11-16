@@ -34,9 +34,16 @@ test('native request-config hook remains config-only; stalled stream uses bounde
  const original=globalThis.fetch;let posted;let forwarded=false;let answer='Insufficient evidence; repeated fetch failed.';
  globalThis.fetch=async(url,options)=>url.endsWith('/api/v0/models')?{ok:true,json:async()=>({data:[{id:'test',state:'loaded',type:'llm',loaded_context_length:16896}]})}:{ok:true,json:async()=>{posted=JSON.parse(options.body);return {choices:[{finish_reason:'stop',message:{content:answer}}]};}};
  try {
-  const request={...config,sessionId:'loop-test',messages:[{role:'user',content:[{type:'text',text:'huge '.repeat(20000)}]}],tools:[{name:'web_fetch'}]};
+  const system={role:'system',content:[{type:'text',text:'Keep the existing synthetic persona and language.'}]};
+  const request={...config,sessionId:'loop-test',messages:[system,{role:'user',content:[{type:'text',text:'huge '.repeat(20000)}]}],tools:[{name:'web_fetch'}]};
   const chunks=[];for await(const c of hooks.get('llm/stream')(request,async function*(){forwarded=true;}))chunks.push(c);
   assert.equal(forwarded,false);assert.match(chunks[0].text,/阶段答复/);assert.equal(posted.reasoning_effort,'none');assert.equal(posted.tools,undefined);assert.equal(request.tools.length,1);
+  assert.match(JSON.stringify(posted.messages),/Keep the existing synthetic persona and language/);
+  assert.deepEqual(request.messages[0],system);
+  posted=null;
+  const oversized={...request,messages:[{role:'system',content:[{type:'text',text:'mandatory instruction '.repeat(20000)}]}]};
+  const rejected=[];for await(const c of hooks.get('llm/stream')(oversized,async function*(){assert.fail('must not forward oversized system');}))rejected.push(c);
+  assert.equal(rejected[0].reason.failure.code,'CONTEXT_WINDOW_EXCEEDED');assert.equal(posted,null);
   answer='   ';const blank=[];for await(const c of hooks.get('llm/stream')(request,async function*(){}))blank.push(c);assert.match(blank[0].text,/未能生成完整/);
   const aborted={...request,signal:AbortSignal.abort(new Error('user canceled'))};await assert.rejects(async()=>{for await(const c of hooks.get('llm/stream')(aborted,async function*(){})){}},/user canceled/);
   events.push({seq:9,type:'user/message',data:{source:{kind:'user'},content:[{type:'text',text:'Now inspect a different file.'}]}});

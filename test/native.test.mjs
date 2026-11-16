@@ -60,6 +60,8 @@ test('native Harness compaction preserves events, persists, and rolls back malfo
       const ctx = new Context();
       const store = new SessionStore(ctx);
       const session = store.prepare('synthetic', { meta: { cwd: process.cwd() } });
+      const system={role:'system',source:{kind:'system-prompt'},content:[{type:'text',text:'Preserve the current synthetic persona.'}]};
+      session.append('system/message',{message:system},{surfaceOp:'append'});
       for (let i = 0; i < 3; i++) session.append('user/message', createUserMessage({ content: [{ type: 'text', text: `Synthetic ${i} `.repeat(2000) }], source: { kind: 'human' } }), { surfaceOp: 'append' });
       const original = session.snapshotEvents();
       const surface = [...session.surface.nodes];
@@ -100,7 +102,14 @@ test('native Harness compaction preserves events, persists, and rolls back malfo
         const result = await plugin.compactNow(agent, controller.signal);
         assert.ok(result.shadowedSeqs.length > 0);
         assert.equal(session.surface.replaceGeneration, 1);
-        assert.ok(session.deriveMessages().length < 3);
+        assert.ok(session.deriveMessages().length < 4);
+        assert.deepEqual(session.deriveMessages()[0],system);
+        if(mode==='complete') for(let round=0;round<3;round++){
+          session.append('user/message',createUserMessage({content:[{type:'text',text:`Synthetic round ${round} `.repeat(2000)}],source:{kind:'human'}}),{surfaceOp:'append'});
+          await plugin.compactNow(agent,controller.signal);attempts++;
+          assert.deepEqual(session.deriveMessages()[0],system);
+          assert.equal(session.deriveMessages().filter(m=>m.role==='system').length,1);
+        }
       } else {
         await assert.rejects(plugin.compactNow(agent, controller.signal));
         assert.deepEqual(session.surface.nodes, surface);

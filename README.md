@@ -6,7 +6,9 @@ Framework designed by the author **netsadly**; implementation code written by **
 
 Experimental MIT-licensed context guard for **DeepSeek Harness 0.2.1-rc.5 + LM Studio**. This source release replaces the native `compaction-basic` service while retaining its transactional session replacement machinery.
 
-## Latest improvements — v0.1.1 (2026-11-15)
+## Latest improvements — v0.1.2 (2026-11-16)
+
+Stage answers retain the current system instructions, including existing persona and language requirements. Healthy overlapping tokenizer calls wait serially within a bounded queue and deadline. See the [Chinese release notes, upgrade steps and limitations](docs/RELEASE-v0.1.2.zh-CN.md). No personal preset, model configuration or transcript is included.
 
 See the [Chinese release notes and upgrade guide](docs/RELEASE-v0.1.1.zh-CN.md) for task-provenance protection, stalled-loop stage answers and LM Studio reasoning-level setup. The plugin does not install model metadata or change your local configuration.
 
@@ -97,8 +99,8 @@ Native tests exercise real Session and BasicCompactionEngine transactions with s
 Manual `recover` now saves validated intermediate summaries under `~/.dsh/context-guard-checkpoints`. Each invocation starts at most two new model calls, with a 210-second summary deadline, then reports **Recovery paused**. Run the same command again until it reports **Recovered**; an application restart does not discard completed checkpoints. Only the final native transaction replaces context. This does not resume the historical task. Exact input/session/model/configuration/prompt changes isolate cached work. Corrupt checkpoints fail closed. These files are **unencrypted, plaintext JSON** containing private summaries. The plugin retains them locally and does not upload them to GitHub; host, operating-system, backup and sync behavior is outside its guarantees. Checksums detect accidental corruption, not malicious tampering or authenticity: a writer can change both content and checksum; deleting them while Harness is idle only discards recovery progress. Automatic proactive compaction retains its existing behavior and does not use this manual checkpoint store.
 
 - Text-only local provider; unsupported image/audio/file blocks fail closed. Other providers do not get this plugin's compaction behavior while it replaces the global service.
-- SDK 1.5.0 cannot cancel `countTokens` RPCs. Caller cancellation/timeouts stop waiting; one outstanding RPC is retained until it settles, and further tokenization is rejected rather than accumulated. Restart the plugin if the SDK connection never settles.
-- Concurrent local requests may receive `TOKENIZER_BUSY`. The installed bundle allows **600 seconds** total for a summary tree, with at most 32 calls; the core fallback is 180 seconds when no timeout is supplied. Large records require several sequential model calls, so this timeout is independent of the per-request 5-second capacity/tokenizer check.
+- SDK 1.5.0 cannot cancel `countTokens` RPCs. Healthy overlapping calls wait serially (at most four waiters), within each caller's existing deadline. Cancellation/timeouts stop waiting; an abandoned outstanding RPC retains its lock until it settles. Queue overflow or an abandoned RPC may still cause `TOKENIZER_BUSY`. Restart the plugin if the SDK connection never settles.
+- The installed bundle allows **600 seconds** total for a summary tree, with at most 32 calls; the core fallback is 180 seconds when no timeout is supplied. Large records require several sequential model calls, so this timeout is independent of the per-request 5-second capacity/tokenizer check, which includes queue time.
 - Summaries are lossy and can contain model mistakes. Heading validation checks structure, not factual completeness. The original record is the recovery authority.
 - Desktop manual commands were observed to abort after about five minutes, even with the plugin's 600-second limit. The shorter summary prompt reduces work, but cannot override the host deadline; slow models or very large records can still fail safely without committing a replacement.
 - Internal Harness APIs are version-pinned; revalidate on every Harness update.
