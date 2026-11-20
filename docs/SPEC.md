@@ -1,5 +1,9 @@
 # Context Guard specification
 
+## Reasoning-only EOS recovery (2026-11-21)
+
+For the guarded provider, a normal stop containing reasoning but no non-whitespace answer or tool action must fail explicitly rather than complete the task. Preserve the original reasoning/usage stream as a failed native attempt; never promote reasoning to the final answer. Allow at most one additional model request per active agent turn through native request-error recovery, reset only on idle, and preserve cancellation. Keep selected thinking, tools, messages, model, loaded capacity and sampling settings unchanged. A second such failure must stop with a clear diagnostic; this is containment and bounded recovery, not a cure for model/backend early EOS or a guarantee of answer correctness. Existing compaction and stalled-work finalization remain separate paths. Validate tool actions are not retried by this rule and complex answers against independent expected results.
+
 Build a local DeepSeek Harness plugin that prevents oversized model requests, compacts history before overflow, and can attempt manual recovery of already oversized sessions.
 
 Requirements:

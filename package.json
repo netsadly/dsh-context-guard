@@ -8,7 +8,7 @@
   "description": "Bounded local-context compaction for DeepSeek Harness",
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node --check index.mjs && node --check lib/core.mjs && node --check lib/plugin.mjs && node --check lib/task.mjs && node --check lib/images.mjs"
+    "check": "node --check index.mjs && node --check lib/core.mjs && node --check lib/plugin.mjs && node --check lib/task.mjs && node --check lib/images.mjs && node --check lib/reasoning.mjs"
   },
   "engines": {
     "node": ">=22"
