@@ -140,3 +140,17 @@ test('native pairing selection includes completed results and excludes unfinishe
  const onlyCheckpoint={...session,surface:{nodes:[0,1,5],replaceGeneration:0}};
  assert.equal(plugin.selectRange(onlyCheckpoint,true),null);
 });
+
+
+test('native image boundary backs up before tool calls and text progress remains compactable',{skip:!root},async()=>{
+ const {toolPairingBalancedBefore,toolPairingBalancedAfter}=await import(pathToFileURL(join(root,'@deepseek-ai/dsh-compaction/lib/index.js')));
+ const Plugin=createGuardPlugin({BasicCompactionEngine:class{},toolPairingBalancedBefore,toolPairingBalancedAfter});
+ const plugin=Object.create(Plugin.prototype);plugin.guard={retainTokens:2000};
+ const events=[{seq:0,type:'system/message',data:{}},{seq:1,type:'user/message',data:{source:{kind:'human'},content:[{type:'text',text:'older request'}]}},{seq:2,type:'assistant/message',data:{message:{content:[{type:'tool-call'}]}}},{seq:3,type:'tool/result',data:{message:{content:[{type:'image',attachment:{}}]}}}];
+ const session={surface:{nodes:[0,1,2,3],replaceGeneration:0},eventAt:i=>events[i],deriveEventMessage:e=>e.data.message??e.data};
+ assert.deepEqual(plugin.selectRange(session,true),{start:1,end:1});
+ events[3].data.message.content=[{type:'text',text:'tool result'}];
+ assert.deepEqual(plugin.selectRange(session,true),{start:1,end:3});
+ events.push({seq:4,type:'user/message',data:{source:{kind:'human'},content:[{type:'text',text:'new request'}]}},{seq:5,type:'user/message',data:{source:{kind:'runtime-context'},content:[{type:'text',text:'runtime'}]}});session.surface.nodes.push(4,5);
+ assert.deepEqual(plugin.selectRange(session,true),{start:1,end:3});
+});

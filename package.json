@@ -1,6 +1,6 @@
 {
   "name": "dsh-context-guard",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -8,7 +8,7 @@
   "description": "Bounded local-context compaction for DeepSeek Harness",
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node --check index.mjs && node --check lib/core.mjs && node --check lib/plugin.mjs && node --check lib/task.mjs"
+    "check": "node --check index.mjs && node --check lib/core.mjs && node --check lib/plugin.mjs && node --check lib/task.mjs && node --check lib/images.mjs"
   },
   "engines": {
     "node": ">=22"

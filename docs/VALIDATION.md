@@ -1,4 +1,15 @@
-# Private validation record
+# Validation record
+
+## 2026-11-21: v0.2.0 publication candidate
+
+- Based on published v0.1.2 (fdd908a), preserving its normalized-heading provenance regression test and source fix instead of replacing them with an older development copy.
+- Full test run on the publication checkout: **71 passed, 0 failed, 0 skipped**, including matching extracted Harness 0.2.1-rc.5 native tests and both opt-in live synthetic summary tests. Private extracted modules and live logs are not part of the release.
+- A fresh standard-mode Harness chat sent an actual 640x360 synthetic image through the native attachment path and correctly returned its text VISION 7429 plus a red square and blue circle in order, in about six seconds. Thinking was enabled; this does not certify a distinct Low effort because the backend fell back to on. This desktop check preceded publication reconciliation, whose only additional behavioral difference restores the published summary-heading validation.
+- Separate Standards and Spec reviews found no blocking functional issues. Standards suggested optional deduplication of balanced-range selection; Spec requested this explicit validation record. Neither is a claim of clean-Windows installation or arbitrary complex-task acceptance.
+- Ordinary text compatibility across llm/vlm switches, malformed images, image reservations and safe compaction boundaries are covered synthetically. Actual loaded capacity remained 16,896 in the image trial. Other visual architectures and image-history summarization remain unsupported.
+- Reasoning-only EOS failures were separately reproduced and remain unresolved in v0.2.0. No private persona, original reasoning trace, user screenshot, local model configuration or generated installation bundle is published. See RELEASE-v0.2.0.zh-CN.md for exact scope and local host metadata caveats.
+
+## Historical records
 
 Environment: DeepSeek Harness 0.2.1-rc.5, LM Studio SDK 1.5.0, local text model loaded with a 30,208-token context. This is a version-specific experimental build, not a public release.
 

@@ -6,7 +6,11 @@ Framework designed by the author **netsadly**; implementation code written by **
 
 Experimental MIT-licensed context guard for **DeepSeek Harness 0.2.1-rc.5 + LM Studio**. This source release replaces the native `compaction-basic` service while retaining its transactional session replacement machinery.
 
-## Latest improvements — v0.1.2 (2026-11-16)
+## Latest improvements — v0.2.0 (2026-11-21)
+
+The exact loaded model is now discovered as text-capable llm or vlm. Verified qwen35 vision routes retain native image attachments and reserve conservative visual tokens. Image-bearing history is protected from text-only compaction. See [actual changes, validation and limits](docs/RELEASE-v0.2.0.zh-CN.md). This release does not fix reasoning-only EOS responses.
+
+## Previous improvements — v0.1.2 (2026-11-16)
 
 Stage answers retain the current system instructions, including existing persona and language requirements. Healthy overlapping tokenizer calls wait serially within a bounded queue and deadline. See the [Chinese release notes, upgrade steps and limitations](docs/RELEASE-v0.1.2.zh-CN.md). No personal preset, model configuration or transcript is included.
 
@@ -30,7 +34,7 @@ The budget is a **padded estimate**, not an exact measurement of the provider's 
 
 **Validation gap:** No fresh Windows environment was available. The complete Harness installation, startup, enable/disable and native-service restoration workflow has **not been verified on a fresh Windows installation**. An isolated dependency install on the existing machine is not a substitute for that test.
 
-Support is limited to **Harness 0.2.1-rc.5, local LM Studio and text conversations**. Enabling this plugin disables the global native `compaction-basic` entry, affecting more than the current conversation. Other providers do not receive this plugin's compaction protection; do not assume native compaction remains available as a fallback. Before switching providers or using multimodal content, disable this plugin, restart while idle and verify the native service is restored. Image/audio/file blocks are rejected. Revalidate after host updates.
+Support is limited to **Harness 0.2.1-rc.5, local LM Studio, text conversations and verified qwen35 image attachments**. Enabling this plugin disables the global native `compaction-basic` entry, affecting more than the current conversation. Other providers do not receive this plugin's compaction protection; do not assume native compaction remains available as a fallback. Before switching providers, disable this plugin, restart while idle and verify the native service is restored. Image requests require a loaded qwen35 vlm and valid native attachment metadata. Other image architectures, audio and unsupported file blocks remain rejected. Image-bearing history cannot be text-summarized; a full protected history may require a new chat. Revalidate after host updates.
 
 ## Installation
 

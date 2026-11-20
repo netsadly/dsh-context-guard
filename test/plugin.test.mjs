@@ -227,3 +227,40 @@ test('non-shrinking soft compaction preserves usable history, but hard pressure 
   plugin.compactRegion=async()=>{agent.session.surface.replaceGeneration++;throw refused;};
   await assert.rejects(plugin.compactIfNeeded(agent,'pressure',new AbortController().signal),e=>e===refused);
 });
+
+
+test('vision requests reserve image tokens before forwarding unchanged; model switches remain safe', async () => {
+  const {hooks,plugin,agent}=fixture({outputTokens:2048});
+  const oldFetch=globalThis.fetch;let type='vlm';let capacity=16896;
+  globalThis.fetch=async()=>({ok:true,json:async()=>({data:[{id:'test',state:'loaded',type,arch:'qwen35',loaded_context_length:capacity}]})});
+  const image={type:'image',attachment:{attachmentId:'fixture',mediaType:'image/png',bytes:1024,width:512,height:512}};
+  const request={provider:'lmstudio',model:'test',maxTokens:2048,messages:[{role:'user',content:[image]}],tools:[]};
+  agent.session.messages=request.messages;
+  try {
+    assert.ok((await plugin.measureGuard(agent)).count > 512);
+    agent.session.messages=[];plugin.pending.set(agent,request.messages);
+    assert.ok((await plugin.measureGuard(agent)).count > 512);
+    plugin.pending.delete(agent);agent.session.messages=request.messages;
+    let forwarded=0;const next=async function*(){forwarded++;yield {type:'finish',reason:{kind:'stop'}};};
+    for await(const chunk of hooks.get('llm/stream')(request,next)){}
+    assert.equal(forwarded,1);assert.equal(request.messages[0].content[0],image);
+    type='llm';await assert.rejects(async()=>{for await(const c of hooks.get('llm/stream')(request,next)){}},/text model/);
+    const text={...request,messages:[{role:'user',content:[{type:'text',text:'hello'}]}]};
+    for await(const c of hooks.get('llm/stream')(text,next)){} assert.equal(forwarded,2);
+    type='vlm';capacity=10000;const large={...request,messages:[{role:'user',content:[{...image,attachment:{...image.attachment,width:2048,height:2048}}]}]};
+    const output=[];for await(const c of hooks.get('llm/stream')(large,next))output.push(c);
+    assert.equal(output[0].reason.kind,'error');assert.equal(forwarded,2);
+  } finally {globalThis.fetch=oldFetch;}
+});
+
+
+test('compaction excludes image-bearing history and latest human request behind runtime notices',()=>{
+ const {plugin,agent}=fixture();
+ const image={type:'image',attachment:{attachmentId:'test',mediaType:'image/png',bytes:10,width:640,height:360}};
+ const events=[{type:'system/message'}, {type:'user/message',data:{source:{kind:'user'},content:[image]}}, {type:'user/message',data:{source:{kind:'runtime-context'},content:[{type:'text',text:'runtime'.repeat(2000)}]}}];
+ agent.session.surface.nodes=[0,1,2];agent.session.eventAt=i=>events[i];agent.session.deriveEventMessage=e=>e.data;
+ assert.equal(plugin.selectRange(agent.session,true),null);
+ assert.equal(plugin.selectRange(agent.session,false),null);
+ events.splice(1,0,{type:'user/message',data:{source:{kind:'user'},content:[{type:'text',text:'old task'.repeat(300)}]}});agent.session.surface.nodes=[0,1,2,3];
+ assert.deepEqual(plugin.selectRange(agent.session,true),{start:1,end:1});
+});
