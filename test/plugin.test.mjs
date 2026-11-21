@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGuardPlugin } from '../lib/plugin.mjs';
 import { estimate } from '../lib/core.mjs';
+import { REASONING_ONLY_EOS } from '../lib/reasoning.mjs';
 
 class Base {
   constructor(ctx) { this.ctx = ctx; }
@@ -20,6 +21,45 @@ function fixture(config = {}) {
   const agent = { options: { provider: 'lmstudio', model: 'test' }, session };
   return { hooks, commands, plugin, agent };
 }
+
+test('reasoning-only retry is bounded per active turn, preserves thinking/tools and resets on idle', async () => {
+  const { hooks, agent } = fixture({ outputTokens: 2048 });
+  const signal = new AbortController().signal;
+  const failure = { code: REASONING_ONLY_EOS };
+  let downstream = 0;
+  const next = async () => { downstream++; return { kind: 'retry' }; };
+  const error = () => hooks.get('agent/request-error')({ agent, failure, signal }, next);
+  assert.deepEqual(await error(), { kind: 'retry' });
+  assert.equal(await error(), undefined);
+  assert.equal(downstream, 0);
+  const config = { provider: 'lmstudio', model: 'test', maxTokens: 2048, reasoningEffort: 'high' };
+  assert.deepEqual(await hooks.get('agent/request')({ agent }, async () => config), config);
+  hooks.get('agent/status')({ agent, status: 'idle' });
+  assert.deepEqual(await error(), { kind: 'retry' });
+  hooks.get('agent/status')({ agent, status: 'idle' });
+  assert.equal(await hooks.get('agent/request-error')({ agent, failure, signal: AbortSignal.abort() }, next), undefined);
+  assert.deepEqual(await error(), { kind: 'retry' }); // cancellation consumes no retry
+  agent.options.provider = 'other';
+  assert.deepEqual(await error(), { kind: 'retry' });
+  assert.equal(downstream, 1);
+});
+
+test('guarded streaming detects reasoning-only EOS without changing messages, settings or tools', async () => {
+  const { hooks } = fixture({ outputTokens: 2048 });
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ data: [{ id: 'test', state: 'loaded', type: 'llm', loaded_context_length: 16896 }] }) });
+  try {
+    const request = { provider: 'lmstudio', model: 'test', maxTokens: 2048, reasoningEffort: 'high', messages: [{ role: 'user', content: 'Solve the constraints.' }], tools: [{ name: 'lookup', parameters: { type: 'object' } }] };
+    const before = structuredClone(request);
+    const chunks = [];
+    for await (const chunk of hooks.get('llm/stream')(request, async function* () {
+      yield { type: 'reasoning-delta', index: 0, text: 'Checking constraints.' };
+      yield { type: 'finish', reason: { kind: 'stop' } };
+    })) chunks.push(chunk);
+    assert.equal(chunks.at(-1).reason.failure.code, REASONING_ONLY_EOS);
+    assert.deepEqual(request, before);
+  } finally { globalThis.fetch = oldFetch; }
+});
 
 test('native request-config hook remains config-only; stalled stream uses bounded answer and new task restores tools', async () => {
  const {hooks,agent,plugin}=fixture({outputTokens:2048});agent.session.id='loop-test';
